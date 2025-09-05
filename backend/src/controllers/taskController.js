@@ -1,6 +1,7 @@
-const tasks = require('../models/task');
+const Task = require('../models/task');
+const User = require('../models/user');
 
-// Create a new task
+// Create a new task (user-specific)
 async function createTask(req, res, next) {
   try {
     const { title } = req.body;
@@ -8,36 +9,42 @@ async function createTask(req, res, next) {
       return res.status(400).json({ message: "Title is required" });
     }
 
-    const task = await tasks.create({ title: title.trim() });
+    const task = await Task.create({
+      title: title.trim(),
+      user: req.user._id, // tie task to logged-in user
+    });
+
     res.status(201).json(task);
   } catch (err) {
     next(err);
   }
 }
 
-// Get all tasks
+// Get all tasks for logged-in user
 async function getTasks(req, res, next) {
   try {
-    const allTasks = await tasks.find().sort({ createdAt: -1 });
+    const allTasks = await Task.find({ user: req.user._id })
+      .sort({ createdAt: -1 });
+
     res.status(200).json(allTasks);
   } catch (err) {
     next(err);
   }
 }
 
-// Update a task
+// Update a task (only if it belongs to the user)
 async function updateTask(req, res, next) {
   try {
     const id = req.params.id;
     const { title, completed } = req.body;
 
-    const task = await tasks.findById(id);
+    const task = await Task.findOne({ _id: id, user: req.user._id });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    if (typeof title === 'string') task.title = title.trim();
-    if (typeof completed === 'boolean') task.completed = completed;
+    if (typeof title === "string") task.title = title.trim();
+    if (typeof completed === "boolean") task.completed = completed;
     task.updatedAt = Date.now();
 
     await task.save();
@@ -47,12 +54,12 @@ async function updateTask(req, res, next) {
   }
 }
 
-// Delete a task
+// Delete a task (only if it belongs to the user)
 async function deleteTask(req, res, next) {
   try {
     const id = req.params.id;
-    const task = await tasks.findById(id);
 
+    const task = await Task.findOne({ _id: id, user: req.user._id });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -64,10 +71,10 @@ async function deleteTask(req, res, next) {
   }
 }
 
-// Delete all completed tasks
+// Delete all completed tasks (only for logged-in user)
 async function deleteCompletedTasks(req, res, next) {
   try {
-    await tasks.deleteMany({ completed: true });
+    await Task.deleteMany({ completed: true, user: req.user._id });
     res.status(200).json({ message: "All completed tasks deleted" });
   } catch (err) {
     next(err);
